@@ -1,71 +1,68 @@
-#include "../../libprism/libprism.h"
-const u16 bgcolor=RGB15(4,0,12);
-const int useARM7Bios=0;
+#include <nds.h>
+#include <nds//disc_io.h>
+#include <nds/arm9/dldi.h>
+#include <fat.h>
+#include <stdio.h>
+#include <unistd.h>
 
-void Main(){
-	char file[256*3]="";
+#include "nds_loader_arm9.h"
 
-	char utf8[768];
+int die() {
+	while(1) swiWaitForVBlank();
+}
+
+int main(int argc, char** argv){
+	consoleDemoInit();
+	iprintf("ttloader technology preview\n");
+	if(!fatInitDefault()) {
+		iprintf("FAT init fail.\n");
+		return die();
+	}
+
+	char file[24]="";
 	char name[0x1001];
-	//TExtLinkBody extlink;
-	FILE *f;
 
-	_consolePrintf(
-		"ttloader technology preview\n"
-		"reset_mse_06b_for_ak2 by Moonlight, Rudolph, kzat3\n"
-		"dldipatch aka dlditool public domain under CC0.\n"
-		"%s\n%s\n\n",
-		ROMDATE,ROMENV
-	);
-
-	char dldiid[5];
-	{
-		unsigned char *dldiFileData=DLDIDATA;
-		memcpy(dldiid,(char*)dldiFileData+ioType,4);
-		dldiid[4]=0;
-		_consolePrintf("DLDI ID: %s\n",dldiid);
-		_consolePrintf("DLDI Name: %s\n\n",(char*)dldiFileData+friendlyName);
+	unsigned long ioType = dldiGetInternal()->ioType;
+	iprintf("%08lX\n", ioType);
+	iprintf("Setting loader...\n");
+	switch(ioType){
+		case 0x4f495454: // TTIO
+			sprintf(file, "/TTMenu/ttpatch.dat");
+			break;
+		case 0x46543452: // R4TF
+			sprintf(file, "/TTMenu/r4patch.dat");
+			break;
+		case 0x5344334d: // M3DS
+		case 0x53445469: // iTDS
+		case 0x495f3452: // R4_I
+			sprintf(file, "/TTMenu/m3patch.dat");
+			break;
+		default:
+			iprintf("This cart not compatible.\n");
+			return die();
 	}
-	DLDIToBoot=NULL; //kill dldipatch
-
-	//_consolePrint("Waiting... ");
-	//sleep(1);
-	//_consolePrint("Done.\n");
-
-	_consolePrint("Initializing FAT... ");
-	if(!disc_mount()){_consolePrint("Failed.\n");die();}
-	_consolePrint("Done.\n");
-
-	_consolePrint("Opening frontend... ");
-	if(!readFrontend(utf8)){_consolePrint("Failed.\n");die();}
-	_consolePrint("Done.\n");
-
-	_consolePrint("Setting loader... ");
-	if(!strcmp(dldiid,"TTIO")){
-		if(!strcpy_safe(file,findpath(3,(char*[]){"/YSMenu/","/_SYSTEM_/","/TTMenu/"},"ttpatch.dat")))goto loader_fail;
-	}else if(!strcmp(dldiid,"R4TF")){
-		if(!strcpy_safe(file,findpath(3,(char*[]){"/YSMenu/","/_SYSTEM_/","/TTMenu/"},"r4patch.dat")))goto loader_fail;
-	}else if(!strcmp(dldiid,"M3DS")||!strcmp(dldiid,"iTDS")||!strcmp(dldiid,"R4_I")){
-		if(!strcpy_safe(file,findpath(3,(char*[]){"/YSMenu/","/_SYSTEM_/","/TTMenu/"},"m3patch.dat")))goto loader_fail;
-	}else{
-loader_fail:
-		_consolePrint("Failed.\n");die();
+	if(access(file, F_OK) != 0) {
+		iprintf("tt/r4/m3patch not found.\n");
+		return die();
 	}
-	_consolePrint("Done.\n");
+	iprintf("Done.\n");
 	
-
-	if(!(f=fopen("/ttmenu.sys","r+b"))){_consolePrint("Failed.\n");die();}
+	if(access("/ttmenu.sys", F_OK) != 0) {
+		iprintf("TTMENU.SYS not found.\n");
+		return die();
+	}
+	FILE *f = fopen("/ttmenu.sys", "r+b");
 	fwrite("ttds",1,4,f);
 
+	iprintf("%s\n", argv[1]);
 	fseek(f,0x100,SEEK_SET);
 	memset(name,0,0x1001);
-	getsfnlfn(utf8,name,NULL);
+	sprintf(name+1, "%s", argv[1]);
 	fwrite(name+1,1,0x1000,f);
 
+	iprintf("%s\n", argv[2]);
 	memset(name,0,0x1001);
-	strcpy(utf8+strlen(utf8)-3,"sav");
-	getsfnlfn(utf8,name,NULL);
-	libprism_touch(utf8);
+	sprintf(name+1, "%s", argv[2]);
 	fwrite(name+1,1,0x1000,f);
 
 	memset(name,0,0x1001);
@@ -73,34 +70,15 @@ loader_fail:
 	fwrite(name+1,1,0x1000,f);
 	fclose(f);
 
-	BootNDSROMex(file);
-#if 0
-
-	// vvvvvvvvvvv add 2008.03.30 kzat3
-	_consolePrintf("allocating %s...\n",file);
-	if (ret_menu9_Gen(file) == true) {
-		_consolePrint("allocate done.\n");
-	} else {
-		_consolePrint("allocate failed.\n");
-		die();
+	iprintf("Press START to launch.\n");
+	while(1) {
+		swiWaitForVBlank();
+		scanKeys();
+		int pressed = keysDown();
+		if(pressed & KEY_START) break;
 	}
 
-	//magic
-/*
-	strcpy(0x023fda00,"fat1:");
-	strcpy(0x023fda05,extlink.DataFullPathFilenameAlias);
-	strcpy(0x023fdc00,"fat1:");
-	strcpy(0x023fdc05,extlink.DataFullPathFilenameAlias);
-	strcpy(0x023fdc05+strlen(extlink.DataFullPathFilenameAlias)-3,"SAV");
-	strcpy(0x023fde00,"fat1:/");
-*/
-
-       IPCZ->cmd=ResetRudolph;
-	//fifoSendValue32(FIFO_USER_07,1);
-	_consolePrint("rebooting... \n");
-	ret_menu9_GENs();
-	_consolePrint("failed.\n");
-#endif
-	die();
-	// ^^^^^^^^^^^^ add 2008.03.30 kzat3
+	int err = runNdsFile(file, 0, NULL);
+	iprintf("Start failed, error %d\n", err);
+	return die();
 }
