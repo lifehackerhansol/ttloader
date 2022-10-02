@@ -3,3 +3,4 @@ data
 *.elf
 *.nds
 *.bin
+*.dldi
