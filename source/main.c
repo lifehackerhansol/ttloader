@@ -51,25 +51,27 @@ int main(int argc, char** argv){
 		iprintf("TTMENU.SYS not found.\n");
 		return die();
 	}
-	FILE *f = fopen("/ttmenu.sys", "r+b");
+	snprintf(name, 2, "/");
+	FILE *f = fopen("/ttmenu.sys", "rb+");
+	fseek(f, 0, SEEK_SET);
 	fwrite("ttds",1,4,f);
 
 	iprintf("%s\n", argv[1]);
 	fseek(f,0x100,SEEK_SET);
-	memset(name,0,0x1001);
-	SLIM_getsfn(argv[1],name);
+	memset(name+1,0,0x1000);
+	SLIM_getsfn(argv[1],name+1);
 	iprintf("%s\n", name);
-	fwrite(name+1,1,0x1000,f);
+	fwrite(name,1,0x1000,f);
 
 	iprintf("%s\n", argv[2]);
-	memset(name,0,0x1001);
-	SLIM_getsfn(argv[2],name);
+	memset(name+1,0,0x1000);
+	SLIM_getsfn(argv[2],name+1);
 	iprintf("%s\n", name);
-	fwrite(name+1,1,0x1000,f);
+	fwrite(name,1,0x1000,f);
 
-	memset(name,0,0x1001);
+	memset(name+1,0,0x1000);
 	//strcpy(name,***ARP***);
-	fwrite(name+1,1,0x1000,f);
+	fwrite(name,1,0x1000,f);
 	fflush(f);
 	fclose(f);
 
