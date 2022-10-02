@@ -1,7 +1,7 @@
 #include <nds.h>
-#include <nds//disc_io.h>
+#include <nds/disc_io.h>
 #include <nds/arm9/dldi.h>
-#include <fat.h>
+#include <slim.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -57,17 +57,20 @@ int main(int argc, char** argv){
 	iprintf("%s\n", argv[1]);
 	fseek(f,0x100,SEEK_SET);
 	memset(name,0,0x1001);
-	sprintf(name+1, "%s", argv[1]);
+	SLIM_getsfn(argv[1],name);
+	iprintf("%s\n", name);
 	fwrite(name+1,1,0x1000,f);
 
 	iprintf("%s\n", argv[2]);
 	memset(name,0,0x1001);
-	sprintf(name+1, "%s", argv[2]);
+	SLIM_getsfn(argv[2],name);
+	iprintf("%s\n", name);
 	fwrite(name+1,1,0x1000,f);
 
 	memset(name,0,0x1001);
 	//strcpy(name,***ARP***);
 	fwrite(name+1,1,0x1000,f);
+	fflush(f);
 	fclose(f);
 
 	iprintf("Press START to launch.\n");
