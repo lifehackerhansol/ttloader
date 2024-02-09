@@ -41,10 +41,8 @@ Helpful information:
 #include <nds/memory.h>
 #include <nds/arm7/audio.h>
 #include "fat.h"
-#include "dldi_patcher.h"
 #include "card.h"
 #include "boot.h"
-#include "sdmmc.h"
 
 void arm7clearRAM();
 
@@ -227,6 +225,7 @@ void resetMemory_ARM7 (void)
 
 }
 
+extern int isSDHC;
 
 void loadBinary_ARM7 (u32 fileCluster)
 {
@@ -247,29 +246,30 @@ void loadBinary_ARM7 (u32 fileCluster)
 	fileRead(ARM9_DST, fileCluster, ARM9_SRC, ARM9_LEN);
 	fileRead(ARM7_DST, fileCluster, ARM7_SRC, ARM7_LEN);
 
+	// TTPATCH LOADER CHANGES START
+    // patch a loop in ARM9
+    // not sure why it's there. Some sort of obfuscation mechanism?
+    if (*((vu32*)(ARM9_DST + 0xEC)) == 0xEAFFFFFE) // b #0; bad
+        *((vu32*)(ARM9_DST + 0xEC)) = 0xE3A00000; // mov r0, #0
+
+    // ttpatch checks this for some reason
+    *((vu32*)0x02FFFC20) = 0x5555AAAA;
+
+    // set SD/SDHC flag
+    *((vu32*)0x02FFFC24) = isSDHC == 0 ? ~0 : 0;
+
+    // this int seems to be a flag to reinitialize the SD card in ttpatch
+    // if this is *not* -1, ttpatch sends an SDIO CMD12 (STOP_TRANSMISSION)
+    // other frontends set this to -1 by default, so let's do it too
+    *((vu32*)0x02FFFC28) = ~0;
+	// TTPATCH LOADER CHANGES END
+
 	// first copy the header to its proper location, excluding
 	// the ARM9 start address, so as not to start it
 	TEMP_ARM9_START_ADDRESS = ndsHeader[0x024>>2];		// Store for later
 	ndsHeader[0x024>>2] = 0;
 	dmaCopyWords(3, (void*)ndsHeader, (void*)NDS_HEAD, 0x170);
 
-	if (dsiMode && (ndsHeader[0x10>>2]&BIT(16+1)))
-	{
-		// Read full TWL header
-		fileRead((char*)TWL_HEAD, fileCluster, 0, 0x1000);
-
-		u32 ARM9i_SRC = *(u32*)(TWL_HEAD+0x1C0);
-		char* ARM9i_DST = (char*)*(u32*)(TWL_HEAD+0x1C8);
-		u32 ARM9i_LEN = *(u32*)(TWL_HEAD+0x1CC);
-		u32 ARM7i_SRC = *(u32*)(TWL_HEAD+0x1D0);
-		char* ARM7i_DST = (char*)*(u32*)(TWL_HEAD+0x1D8);
-		u32 ARM7i_LEN = *(u32*)(TWL_HEAD+0x1DC);
-
-		if (ARM9i_LEN)
-			fileRead(ARM9i_DST, fileCluster, ARM9i_SRC, ARM9i_LEN);
-		if (ARM7i_LEN)
-			fileRead(ARM7i_DST, fileCluster, ARM7i_SRC, ARM7i_LEN);
-	}
 }
 
 /*-------------------------------------------------------------------------
@@ -290,38 +290,11 @@ void startBinary_ARM7 (void) {
 	VoidFn arm7code = *(VoidFn*)(0x2FFFE34);
 	arm7code();
 }
-#ifndef NO_SDMMC
-int sdmmc_sd_readsectors(u32 sector_no, u32 numsectors, void *out);
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// Main function
-bool sdmmc_inserted() {
-	return true;
-}
 
-bool sdmmc_startup() {
-	sdmmc_controller_init(true);
-	return sdmmc_sdcard_init() == 0;
-}
-
-bool sdmmc_readsectors(u32 sector_no, u32 numsectors, void *out) {
-	return sdmmc_sdcard_readsectors(sector_no, numsectors, out) == 0;
-}
-#endif
 void mpu_reset();
 void mpu_reset_end();
 
 int main (void) {
-#ifdef NO_DLDI
-	dsiSD = true;
-	dsiMode = true;
-#endif
-#ifndef NO_SDMMC
-	if (dsiSD && dsiMode) {
-		_io_dldi.fn_readSectors = sdmmc_readsectors;
-		_io_dldi.fn_isInserted = sdmmc_inserted;
-		_io_dldi.fn_startup = sdmmc_startup;
-	}
-#endif
 	u32 fileCluster = storedFileCluster;
 	// Init card
 	if(!FAT_InitFiles(initDisc))
@@ -362,21 +335,6 @@ int main (void) {
 	// Load the NDS file
 	loadBinary_ARM7(fileCluster);
 
-#ifndef NO_DLDI
-	// Patch with DLDI if desired
-	if (wantToPatchDLDI) {
-		dldiPatchBinary ((u8*)((u32*)NDS_HEAD)[0x0A], ((u32*)NDS_HEAD)[0x0B]);
-	}
-#endif
-
-#ifndef NO_SDMMC
-	if (dsiSD && dsiMode) {
-		sdmmc_controller_init(true);
-		*(vu16*)(SDMMC_BASE + REG_SDDATACTL32) &= 0xFFFDu;
-		*(vu16*)(SDMMC_BASE + REG_SDDATACTL) &= 0xFFDDu;
-		*(vu16*)(SDMMC_BASE + REG_SDBLKLEN32) = 0;
-	}
-#endif
 	// Pass command line arguments to loaded program
 	passArgs_ARM7();
 
