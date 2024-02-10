@@ -13,8 +13,6 @@ endif
 
 include $(DEVKITARM)/ds_rules
 
-export LIBSLIM  		:=	$(CURDIR)/libslim/libslim
-
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
 # BUILD is the directory where object files & intermediate files will be placed
@@ -28,8 +26,8 @@ export LIBSLIM  		:=	$(CURDIR)/libslim/libslim
 #---------------------------------------------------------------------------------
 TARGET   := $(shell basename $(CURDIR))
 BUILD    := build
-SOURCES  := source
-INCLUDES := include
+SOURCES  := source source/libfat_ext
+INCLUDES :=
 DATA     := data
 GRAPHICS :=
 AUDIO    :=
@@ -53,13 +51,13 @@ LDFLAGS   = -specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project (order is important)
 #---------------------------------------------------------------------------------
-LIBS := -lslim -lnds9
+LIBS := -lfat -lnds9
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS := $(LIBNDS) $(LIBSLIM) $(PORTLIBS)
+LIBDIRS := $(LIBNDS) $(PORTLIBS)
 
 #---------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional

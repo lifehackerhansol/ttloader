@@ -1,14 +1,16 @@
 #include <nds.h>
 #include <nds/disc_io.h>
 #include <nds/arm9/dldi.h>
-#include <slim.h>
+#include <fat.h>
 #include <stdio.h>
 #include <unistd.h>
 
+#include "libfat_ext/fat_ext.h"
 #include "nds_loader_arm9.h"
 
 int die() {
 	while(1) swiWaitForVBlank();
+	return 0;
 }
 
 int main(int argc, char** argv){
@@ -48,9 +50,15 @@ int main(int argc, char** argv){
 	iprintf("Done.\n");
 	
 	if(access("/ttmenu.sys", F_OK) != 0) {
-		iprintf("TTMENU.SYS not found.\n");
-		return die();
+		iprintf("TTMENU.SYS not found. Creating...\n");
+		FILE *f = fopen("/ttmenu.sys", "wb");
+		fseek(f, 0, SEEK_SET);
+        // memdump. Actually just expanding the file seems to crash, but this works totally fine...
+        fwrite((void*)0x02400000, 0x400000, 1, f);
+		fflush(f);
+		fclose(f);
 	}
+
 	snprintf(name, 2, "/");
 	FILE *f = fopen("/ttmenu.sys", "rb+");
 	fseek(f, 0, SEEK_SET);
@@ -59,13 +67,13 @@ int main(int argc, char** argv){
 	iprintf("%s\n", argv[1]);
 	fseek(f,0x100,SEEK_SET);
 	memset(name+1,0,0x1000);
-	SLIM_getsfn(argv[1],name+1);
+	fatGetAliasPath("fat:/", argv[1],name+1);
 	iprintf("%s\n", name);
 	fwrite(name,1,0x1000,f);
 
 	iprintf("%s\n", argv[2]);
 	memset(name+1,0,0x1000);
-	SLIM_getsfn(argv[2],name+1);
+	fatGetAliasPath("fat:/", argv[2],name+1);
 	iprintf("%s\n", name);
 	fwrite(name,1,0x1000,f);
 
