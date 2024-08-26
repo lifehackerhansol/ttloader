@@ -81,7 +81,7 @@ Modified by Chishm:
 void __attribute__ ((long_call)) __attribute__((noreturn)) __attribute__((naked)) startBinary_ARM9 (void)
 {
 	REG_IME=0;
-	REG_EXMEMCNT = 0xE880;
+	REG_EXMEMCNT = 0xE000;
 	// set ARM9 load address to 0 and wait for it to change again
 	ARM9_START_FLAG = 0;
 	while(REG_VCOUNT!=191);
