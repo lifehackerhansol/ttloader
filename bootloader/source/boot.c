@@ -105,65 +105,6 @@ static inline void copyLoop (u32* dest, const u32* src, u32 size) {
 
 //#define resetCpu() __asm volatile("\tswi 0x000000\n");
 
-static char boot_nds[] = "fat:/boot.nds";
-static unsigned long argbuf[4];
-/*-------------------------------------------------------------------------
-passArgs_ARM7
-Copies the command line arguments to the end of the ARM9 binary,
-then sets a flag in memory for the loaded NDS to use
---------------------------------------------------------------------------*/
-void passArgs_ARM7 (void) {
-	u32 ARM9_DST = *((u32*)(NDS_HEAD + 0x028));
-	u32 ARM9_LEN = *((u32*)(NDS_HEAD + 0x02C));
-	u32* argSrc;
-	u32* argDst;
-
-	if (!argStart || !argSize) {
-
-		char *arg = boot_nds;
-		argSize = __builtin_strlen(boot_nds);
-
-		if (dsiSD) {
-			arg++;
-			arg[0] = 's';
-			arg[1] = 'd';
-		}
-		__builtin_memcpy(argbuf,arg,argSize+1);
-		argSrc = argbuf;
-	} else {
-		argSrc = (u32*)(argStart + (int)&_start);
-	}
-
-	if ( ARM9_DST == 0 && ARM9_LEN == 0) {
-		ARM9_DST = *((u32*)(NDS_HEAD + 0x038));
-		ARM9_LEN = *((u32*)(NDS_HEAD + 0x03C));
-	}
-
-
-	argDst = (u32*)((ARM9_DST + ARM9_LEN + 3) & ~3);		// Word aligned
-
-	if (dsiMode && (*(u8*)(NDS_HEAD + 0x012) & BIT(1)))
-	{
-		u32 ARM9i_DST = *((u32*)(TWL_HEAD + 0x1C8));
-		u32 ARM9i_LEN = *((u32*)(TWL_HEAD + 0x1CC));
-		if (ARM9i_LEN)
-		{
-			u32* argDst2 = (u32*)((ARM9i_DST + ARM9i_LEN + 3) & ~3);		// Word aligned
-			if (argDst2 > argDst)
-				argDst = argDst2;
-		}
-	}
-
-	copyLoop(argDst, argSrc, argSize);
-
-	__system_argv->argvMagic = ARGV_MAGIC;
-	__system_argv->commandLine = (char*)argDst;
-	__system_argv->length = argSize;
-}
-
-
-
-
 /*-------------------------------------------------------------------------
 resetMemory_ARM7
 Clears all of the NDS's RAM that is visible to the ARM7
@@ -225,7 +166,7 @@ void resetMemory_ARM7 (void)
 
 }
 
-extern int isSDHC;
+extern u32 isSDHC;
 
 void loadBinary_ARM7 (u32 fileCluster)
 {
@@ -253,15 +194,16 @@ void loadBinary_ARM7 (u32 fileCluster)
         *((vu32*)(ARM9_DST + 0xEC)) = 0xE3A00000; // mov r0, #0
 
     // ttpatch checks this for some reason
-    *((vu32*)0x02FFFC20) = 0x5555AAAA;
+    //(*(vu32*)0x02FFFC20) = 0x5555AAAA;
+    (*(vu32*)0x02FFFC20) = 0;
 
     // set SD/SDHC flag
-    *((vu32*)0x02FFFC24) = isSDHC == 0 ? ~0 : 0;
+    (*(vu32*)0x02FFFC24) = isSDHC == 0 ? ~0 : 0;
 
     // this int seems to be a flag to reinitialize the SD card in ttpatch
     // if this is *not* -1, ttpatch sends an SDIO CMD12 (STOP_TRANSMISSION)
     // other frontends set this to -1 by default, so let's do it too
-    *((vu32*)0x02FFFC28) = ~0;
+    (*(vu32*)0x02FFFC28) = ~0;
 	// TTPATCH LOADER CHANGES END
 
 	// first copy the header to its proper location, excluding
@@ -334,9 +276,6 @@ int main (void) {
 
 	// Load the NDS file
 	loadBinary_ARM7(fileCluster);
-
-	// Pass command line arguments to loaded program
-	passArgs_ARM7();
 
 	startBinary_ARM7();
 
